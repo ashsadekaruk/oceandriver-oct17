@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Ocean Diver</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #06324d; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="sea"></canvas>
+<script>
+const canvas = document.getElementById('sea');
+const ctx = canvas.getContext('2d');
+let w, h;
+
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Where the diver is heading (mouse or finger)
+const target = { x: w / 2, y: h / 2 };
+function aim(x, y) { target.x = x; target.y = y; }
+window.addEventListener('mousemove', e => aim(e.clientX, e.clientY));
+window.addEventListener('touchstart', e => aim(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+window.addEventListener('touchmove', e => aim(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+
+const diver = { x: w / 2, y: h / 2, vx: 0, vy: 0, facing: 1, kick: 0 };
+const bubbles = [];
+
+// Fish: random colour, size, depth and direction
+const fishColours = ['#ff7043', '#ffca28', '#ab47bc', '#26c6da', '#ef5350', '#9ccc65'];
+const fishes = Array.from({ length: 10 }, () => {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  return {
+    x: Math.random() * w,
+    y: h * (0.15 + Math.random() * 0.65),
+    size: 10 + Math.random() * 14,
+    speed: (0.4 + Math.random() * 0.9) * dir,
+    colour: fishColours[Math.floor(Math.random() * fishColours.length)],
+    phase: Math.random() * 6.28
+  };
+});
+
+function update() {
+  // Glide towards the target, easing off as he arrives
+  const dx = target.x - diver.x, dy = target.y - diver.y;
+  diver.vx += dx * 0.002;
+  diver.vy += dy * 0.002;
+  diver.vx *= 0.93;
+  diver.vy *= 0.93;
+  diver.x += diver.vx;
+  diver.y += diver.vy;
+
+  const speed = Math.hypot(diver.vx, diver.vy);
+  if (Math.abs(diver.vx) > 0.15) diver.facing = diver.vx > 0 ? 1 : -1;
+  diver.kick += 0.1 + speed * 0.05;
+
+  // Bubbles: a few when resting, more when swimming
+  if (Math.random() < 0.04 + Math.min(speed, 8) * 0.03) {
+    bubbles.push({
+      x: diver.x + diver.facing * 34 + (Math.random() - 0.5) * 6,
+      y: diver.y - 14,
+      r: 2 + Math.random() * 5,
+      wobble: Math.random() * 6.28,
+      rise: 0.6 + Math.random() * 1.0,
+      life: 1
+    });
+  }
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    b.y -= b.rise;
+    b.wobble += 0.06;
+    b.x += Math.sin(b.wobble) * 0.4;
+    if (b.y < h * 0.12) b.life -= 0.02; // fade near the surface
+    if (b.life <= 0 || b.y < -10) bubbles.splice(i, 1);
+  }
+}
+
+function drawSea(t) {
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#4fc3e8');
+  g.addColorStop(0.5, '#1a7fb0');
+  g.addColorStop(1, '#06324d');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  // Sandy floor
+  const floorY = h * 0.92;
+  ctx.fillStyle = '#d9c28a';
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  for (let x = 0; x <= w; x += 20) ctx.lineTo(x, floorY + Math.sin(x * 0.01) * 8);
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fill();
+
+  // Swaying seaweed
+  ctx.strokeStyle = '#2f9e5b';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  for (let x = w * 0.08; x < w; x += w * 0.17) {
+    ctx.beginPath();
+    ctx.moveTo(x, floorY + 6);
+    for (let i = 1; i <= 6; i++) {
+      ctx.lineTo(x + Math.sin(t / 700 + i * 0.7 + x) * 10 * (i / 3), floorY - i * 18);
+    }
+    ctx.stroke();
+  }
+}
+
+// Seabed height at a given x, matching the sand drawn in drawSea
+const floorAt = x => h * 0.92 + Math.sin(x * 0.01) * 8;
+
+// Wells in a chain: each tieback pipe links a well to the next one,
+// ending at the main well (index 1)
+const wells = [
+  { at: 0.12, main: false },
+  { at: 0.30, main: true },
+  { at: 0.47, main: false },
+  { at: 0.86, main: false }
+];
+
+function drawTieback(xa, xb, t) {
+  const pts = [];
+  for (let x = xa; x <= xb; x += 10) pts.push([x, floorAt(x) + 1]);
+  pts.push([xb, floorAt(xb) + 1]);
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+  ctx.strokeStyle = '#33322e';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+  ctx.strokeStyle = '#f2a900';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+
+  // Glowing dots drifting along the pipe
+  const len = xb - xa;
+  ctx.fillStyle = '#fff7d6';
+  for (let k = 0; k < 4; k++) {
+    const x = xa + ((t * 0.03 + k * len / 4) % len);
+    ctx.beginPath();
+    ctx.arc(x, floorAt(x) + 1, 2, 0, 6.28);
+    ctx.fill();
+  }
+}
+
+function drawWellhead(x, main, t) {
+  const u = Math.max(16, Math.min(w, h) * 0.04) * (main ? 1.3 : 1);
+  ctx.save();
+  ctx.translate(x, floorAt(x) + 3);
+
+  // Base plate, body, side valves, top cap
+  ctx.fillStyle = '#555a60';
+  ctx.fillRect(-1.2 * u, -0.25 * u, 2.4 * u, 0.25 * u);
+  ctx.fillStyle = '#d4472f';
+  ctx.fillRect(-0.35 * u, -1.6 * u, 0.7 * u, 1.35 * u);
+  ctx.fillStyle = '#b53a26';
+  ctx.fillRect(-0.9 * u, -1.1 * u, 0.55 * u, 0.4 * u);
+  ctx.fillRect(0.35 * u, -1.1 * u, 0.55 * u, 0.4 * u);
+  ctx.fillStyle = '#8b9096';
+  ctx.fillRect(-0.2 * u, -1.95 * u, 0.4 * u, 0.35 * u);
+
+  // Valve hand-wheels
+  ctx.strokeStyle = '#8b9096';
+  ctx.lineWidth = Math.max(2, u * 0.08);
+  [-0.62, 0.62].forEach(vx => {
+    ctx.beginPath();
+    ctx.arc(vx * u, -1.3 * u, 0.2 * u, 0, 6.28);
+    ctx.stroke();
+  });
+
+  // Blinking green status light
+  const on = 0.5 + 0.5 * Math.sin(t / 350 + x);
+  ctx.fillStyle = `rgba(90, 255, 120, ${0.35 + 0.65 * on})`;
+  ctx.beginPath();
+  ctx.arc(0, -2.1 * u, 0.1 * u + 1, 0, 6.28);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawSubsea(t) {
+  for (let i = 0; i < wells.length - 1; i++) {
+    const [a, b] = [wells[i].at * w, wells[i + 1].at * w].sort((p, q) => p - q);
+    drawTieback(a, b, t);
+  }
+  wells.forEach(wl => drawWellhead(wl.at * w, wl.main, t));
+}
+
+function drawChest(t) {
+  const u = Math.max(30, Math.min(w, h) * 0.07);
+  const x = w * 0.67;
+  const y = h * 0.92 + Math.sin(x * 0.01) * 8 + 4; // rests on the sand
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Base
+  ctx.fillStyle = '#8d5524';
+  ctx.beginPath();
+  ctx.roundRect(-u, -0.9 * u, 2 * u, 0.9 * u, 4);
+  ctx.fill();
+
+  // Rounded lid
+  ctx.fillStyle = '#a0652d';
+  ctx.beginPath();
+  ctx.moveTo(-u, -0.9 * u);
+  ctx.lineTo(-u, -1.2 * u);
+  ctx.quadraticCurveTo(-u, -1.75 * u, 0, -1.75 * u);
+  ctx.quadraticCurveTo(u, -1.75 * u, u, -1.2 * u);
+  ctx.lineTo(u, -0.9 * u);
+  ctx.closePath();
+  ctx.fill();
+
+  // Metal bands
+  ctx.fillStyle = '#4a4a52';
+  ctx.fillRect(-u, -0.93 * u, 2 * u, 0.07 * u);
+  ctx.fillRect(-0.72 * u, -1.72 * u, 0.14 * u, 1.72 * u);
+  ctx.fillRect(0.58 * u, -1.72 * u, 0.14 * u, 1.72 * u);
+
+  // Golden lock
+  ctx.fillStyle = '#ffd54f';
+  ctx.beginPath();
+  ctx.roundRect(-0.14 * u, -1.08 * u, 0.28 * u, 0.32 * u, 3);
+  ctx.fill();
+  ctx.fillStyle = '#5d3a1a';
+  ctx.beginPath();
+  ctx.arc(0, -0.94 * u, 0.04 * u, 0, 6.28);
+  ctx.fill();
+
+  // Twinkling sparkles
+  ctx.fillStyle = '#fff6c2';
+  [[-0.6, -2.0], [0.1, -2.35], [0.7, -1.95]].forEach(([sx, sy], i) => {
+    const k = Math.max(0, Math.sin(t / 400 + i * 2));
+    const r = 0.14 * u * k;
+    ctx.beginPath();
+    ctx.moveTo(sx * u, sy * u - r * 2);
+    ctx.lineTo(sx * u + r * 0.5, sy * u - r * 0.5);
+    ctx.lineTo(sx * u + r * 2, sy * u);
+    ctx.lineTo(sx * u + r * 0.5, sy * u + r * 0.5);
+    ctx.lineTo(sx * u, sy * u + r * 2);
+    ctx.lineTo(sx * u - r * 0.5, sy * u + r * 0.5);
+    ctx.lineTo(sx * u - r * 2, sy * u);
+    ctx.lineTo(sx * u - r * 0.5, sy * u - r * 0.5);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  ctx.restore();
+}
+
+function updateFish() {
+  for (const f of fishes) {
+    f.x += f.speed;
+    f.phase += 0.15;
+    // Loop back in from the other side
+    if (f.speed > 0 && f.x > w + 60) f.x = -60;
+    if (f.speed < 0 && f.x < -60) f.x = w + 60;
+  }
+}
+
+function drawFish(t) {
+  for (const f of fishes) {
+    const dir = f.speed > 0 ? 1 : -1;
+    const s = f.size;
+    ctx.save();
+    ctx.translate(f.x, f.y + Math.sin(t / 600 + f.phase) * 6);
+    ctx.scale(dir, 1);
+    ctx.fillStyle = f.colour;
+    // Tail
+    const wag = Math.sin(f.phase) * s * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.8, 0);
+    ctx.lineTo(-s * 1.5, -s * 0.6 + wag);
+    ctx.lineTo(-s * 1.5, s * 0.6 + wag);
+    ctx.closePath();
+    ctx.fill();
+    // Body
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s, s * 0.6, 0, 0, 6.28);
+    ctx.fill();
+    // Eye
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(s * 0.5, -s * 0.12, s * 0.16, 0, 6.28);
+    ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.arc(s * 0.55, -s * 0.12, s * 0.07, 0, 6.28);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawBubbles() {
+  for (const b of bubbles) {
+    ctx.globalAlpha = Math.max(b.life, 0) * 0.8;
+    ctx.strokeStyle = '#e8faff';
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, 6.28);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawDiver() {
+  const bob = Math.sin(diver.kick * 0.6) * 2;
+  const flap = Math.sin(diver.kick) * 12;
+  ctx.save();
+  ctx.translate(diver.x, diver.y + bob);
+  ctx.scale(diver.facing, 1);
+  // Tilt gently in the direction of travel
+  ctx.rotate(Math.max(-0.5, Math.min(0.5, diver.vy * 0.04)) * diver.facing);
+
+  // Air tank
+  ctx.fillStyle = '#9aa7b0';
+  ctx.beginPath();
+  ctx.roundRect(-30, -14, 28, 14, 7);
+  ctx.fill();
+
+  // Legs and flippers
+  ctx.strokeStyle = '#1b2a38';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-26, 4);
+  ctx.lineTo(-48, 4 + flap);
+  ctx.stroke();
+  ctx.fillStyle = '#ff9f1c';
+  ctx.beginPath();
+  ctx.ellipse(-56, 4 + flap * 1.2, 11, 5, flap * 0.03, 0, 6.28);
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = '#1b2a38';
+  ctx.beginPath();
+  ctx.ellipse(-4, 0, 30, 13, 0, 0, 6.28);
+  ctx.fill();
+
+  // Arm
+  ctx.strokeStyle = '#1b2a38';
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(8, 6);
+  ctx.lineTo(24, 12 - flap * 0.3);
+  ctx.stroke();
+
+  // Head and mask
+  ctx.fillStyle = '#f2c9a0';
+  ctx.beginPath();
+  ctx.arc(30, -4, 12, 0, 6.28);
+  ctx.fill();
+  ctx.fillStyle = '#bfefff';
+  ctx.strokeStyle = '#ff9f1c';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(31, -12, 14, 12, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function frame(t) {
+  update();
+  updateFish();
+  drawSea(t);
+  drawSubsea(t);
+  drawChest(t);
+  drawFish(t);
+  drawBubbles();
+  drawDiver();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
