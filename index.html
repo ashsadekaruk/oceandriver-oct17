@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Ocean Diver</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #06324d; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="sea"></canvas>
+<script>
+const canvas = document.getElementById('sea');
+const ctx = canvas.getContext('2d');
+let w, h;
+
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Where the diver is heading (mouse or finger)
+const target = { x: w / 2, y: h / 2 };
+function aim(x, y) { target.x = x; target.y = y; }
+window.addEventListener('mousemove', e => aim(e.clientX, e.clientY));
+window.addEventListener('touchstart', e => aim(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+window.addEventListener('touchmove', e => aim(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+
+const diver = { x: w / 2, y: h / 2, vx: 0, vy: 0, facing: 1, kick: 0 };
+const bubbles = [];
+
+function update() {
+  // Glide towards the target, easing off as he arrives
+  const dx = target.x - diver.x, dy = target.y - diver.y;
+  diver.vx += dx * 0.002;
+  diver.vy += dy * 0.002;
+  diver.vx *= 0.93;
+  diver.vy *= 0.93;
+  diver.x += diver.vx;
+  diver.y += diver.vy;
+
+  const speed = Math.hypot(diver.vx, diver.vy);
+  if (Math.abs(diver.vx) > 0.15) diver.facing = diver.vx > 0 ? 1 : -1;
+  diver.kick += 0.1 + speed * 0.05;
+
+  // Bubbles: a few when resting, more when swimming
+  if (Math.random() < 0.04 + Math.min(speed, 8) * 0.03) {
+    bubbles.push({
+      x: diver.x + diver.facing * 34 + (Math.random() - 0.5) * 6,
+      y: diver.y - 14,
+      r: 2 + Math.random() * 5,
+      wobble: Math.random() * 6.28,
+      rise: 0.6 + Math.random() * 1.0,
+      life: 1
+    });
+  }
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    b.y -= b.rise;
+    b.wobble += 0.06;
+    b.x += Math.sin(b.wobble) * 0.4;
+    if (b.y < h * 0.12) b.life -= 0.02; // fade near the surface
+    if (b.life <= 0 || b.y < -10) bubbles.splice(i, 1);
+  }
+}
+
+function drawSea(t) {
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#4fc3e8');
+  g.addColorStop(0.5, '#1a7fb0');
+  g.addColorStop(1, '#06324d');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  // Sandy floor
+  const floorY = h * 0.92;
+  ctx.fillStyle = '#d9c28a';
+  ctx.beginPath();
+  ctx.moveTo(0, h);
+  for (let x = 0; x <= w; x += 20) ctx.lineTo(x, floorY + Math.sin(x * 0.01) * 8);
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fill();
+
+  // Swaying seaweed
+  ctx.strokeStyle = '#2f9e5b';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  for (let x = w * 0.08; x < w; x += w * 0.17) {
+    ctx.beginPath();
+    ctx.moveTo(x, floorY + 6);
+    for (let i = 1; i <= 6; i++) {
+      ctx.lineTo(x + Math.sin(t / 700 + i * 0.7 + x) * 10 * (i / 3), floorY - i * 18);
+    }
+    ctx.stroke();
+  }
+}
+
+function drawBubbles() {
+  for (const b of bubbles) {
+    ctx.globalAlpha = Math.max(b.life, 0) * 0.8;
+    ctx.strokeStyle = '#e8faff';
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, 6.28);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawDiver() {
+  const bob = Math.sin(diver.kick * 0.6) * 2;
+  const flap = Math.sin(diver.kick) * 12;
+  ctx.save();
+  ctx.translate(diver.x, diver.y + bob);
+  ctx.scale(diver.facing, 1);
+  // Tilt gently in the direction of travel
+  ctx.rotate(Math.max(-0.5, Math.min(0.5, diver.vy * 0.04)) * diver.facing);
+
+  // Air tank
+  ctx.fillStyle = '#9aa7b0';
+  ctx.beginPath();
+  ctx.roundRect(-30, -14, 28, 14, 7);
+  ctx.fill();
+
+  // Legs and flippers
+  ctx.strokeStyle = '#1b2a38';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-26, 4);
+  ctx.lineTo(-48, 4 + flap);
+  ctx.stroke();
+  ctx.fillStyle = '#ff9f1c';
+  ctx.beginPath();
+  ctx.ellipse(-56, 4 + flap * 1.2, 11, 5, flap * 0.03, 0, 6.28);
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = '#1b2a38';
+  ctx.beginPath();
+  ctx.ellipse(-4, 0, 30, 13, 0, 0, 6.28);
+  ctx.fill();
+
+  // Arm
+  ctx.strokeStyle = '#1b2a38';
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(8, 6);
+  ctx.lineTo(24, 12 - flap * 0.3);
+  ctx.stroke();
+
+  // Head and mask
+  ctx.fillStyle = '#f2c9a0';
+  ctx.beginPath();
+  ctx.arc(30, -4, 12, 0, 6.28);
+  ctx.fill();
+  ctx.fillStyle = '#bfefff';
+  ctx.strokeStyle = '#ff9f1c';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(31, -12, 14, 12, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function frame(t) {
+  update();
+  drawSea(t);
+  drawBubbles();
+  drawDiver();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
