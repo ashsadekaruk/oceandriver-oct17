@@ -196,6 +196,91 @@ function drawSubsea(t) {
   wells.forEach(wl => drawWellhead(wl.at * w, wl.main, t));
 }
 
+function drawShipwreck(t) {
+  const L = Math.max(110, w * 0.16), H = L * 0.3;
+  const x = w * 0.77;
+  ctx.save();
+  ctx.translate(x, floorAt(x) + H * 0.15);
+  ctx.rotate(-0.12); // settled at a slight angle
+
+  // Mast, crossbeam and tattered sail (behind the hull)
+  const sway = Math.sin(t / 900) * L * 0.03;
+  ctx.strokeStyle = '#3a2616';
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(3, H * 0.09);
+  ctx.beginPath();
+  ctx.moveTo(-0.1 * L, -0.9 * H);
+  ctx.lineTo(-0.16 * L, -2.4 * H);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-0.3 * L, -2.0 * H);
+  ctx.lineTo(0.0, -2.1 * H);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(232, 222, 190, 0.55)';
+  ctx.beginPath();
+  ctx.moveTo(-0.29 * L, -2.0 * H);
+  ctx.lineTo(0.0, -2.1 * H);
+  ctx.lineTo(0.02 * L + sway, -1.5 * H);
+  ctx.lineTo(-0.1 * L + sway, -1.3 * H);
+  ctx.lineTo(-0.2 * L + sway, -1.45 * H);
+  ctx.lineTo(-0.3 * L + sway, -1.2 * H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Hull
+  ctx.save();
+  ctx.fillStyle = '#4e3320';
+  ctx.beginPath();
+  ctx.moveTo(-0.5 * L, -H);
+  ctx.lineTo(-0.4 * L, 0);
+  ctx.lineTo(0.35 * L, 0);
+  ctx.lineTo(0.55 * L, -1.15 * H);
+  ctx.quadraticCurveTo(0, -0.8 * H, -0.5 * L, -H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.clip();
+
+  // Planks
+  ctx.strokeStyle = '#3a2616';
+  ctx.lineWidth = 2;
+  for (const f of [0.28, 0.5, 0.72]) {
+    ctx.beginPath();
+    ctx.moveTo(-L, -f * H);
+    ctx.lineTo(L, -f * H);
+    ctx.stroke();
+  }
+
+  // Hole in the hull
+  ctx.fillStyle = '#10161b';
+  ctx.beginPath();
+  ctx.moveTo(-0.12 * L, -0.65 * H);
+  ctx.lineTo(-0.02 * L, -0.5 * H);
+  ctx.lineTo(0.04 * L, -0.7 * H);
+  ctx.lineTo(0.08 * L, -0.35 * H);
+  ctx.lineTo(-0.04 * L, -0.2 * H);
+  ctx.lineTo(-0.14 * L, -0.3 * H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Portholes
+  ctx.fillStyle = '#1c2a33';
+  ctx.strokeStyle = '#b08d57';
+  ctx.lineWidth = 2;
+  for (const px of [0.2, 0.32]) {
+    ctx.beginPath();
+    ctx.arc(px * L, -0.58 * H, 0.07 * H + 1, 0, 6.28);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Algae near the sand
+  ctx.fillStyle = 'rgba(47, 158, 91, 0.35)';
+  ctx.fillRect(-L, -0.3 * H, 2 * L, 0.3 * H);
+  ctx.restore();
+
+  ctx.restore();
+}
+
 function drawChest(t) {
   const u = Math.max(30, Math.min(w, h) * 0.07);
   const x = w * 0.67;
@@ -377,6 +462,7 @@ function frame(t) {
   updateFish();
   drawSea(t);
   drawSubsea(t);
+  drawShipwreck(t);
   drawChest(t);
   drawFish(t);
   drawBubbles();
