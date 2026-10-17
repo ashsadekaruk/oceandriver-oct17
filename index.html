@@ -114,6 +114,88 @@ function drawSea(t) {
   }
 }
 
+// Seabed height at a given x, matching the sand drawn in drawSea
+const floorAt = x => h * 0.92 + Math.sin(x * 0.01) * 8;
+
+// Wells in a chain: each tieback pipe links a well to the next one,
+// ending at the main well (index 1)
+const wells = [
+  { at: 0.12, main: false },
+  { at: 0.30, main: true },
+  { at: 0.47, main: false },
+  { at: 0.86, main: false }
+];
+
+function drawTieback(xa, xb, t) {
+  const pts = [];
+  for (let x = xa; x <= xb; x += 10) pts.push([x, floorAt(x) + 1]);
+  pts.push([xb, floorAt(xb) + 1]);
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+  ctx.strokeStyle = '#33322e';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+  ctx.strokeStyle = '#f2a900';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+
+  // Glowing dots drifting along the pipe
+  const len = xb - xa;
+  ctx.fillStyle = '#fff7d6';
+  for (let k = 0; k < 4; k++) {
+    const x = xa + ((t * 0.03 + k * len / 4) % len);
+    ctx.beginPath();
+    ctx.arc(x, floorAt(x) + 1, 2, 0, 6.28);
+    ctx.fill();
+  }
+}
+
+function drawWellhead(x, main, t) {
+  const u = Math.max(16, Math.min(w, h) * 0.04) * (main ? 1.3 : 1);
+  ctx.save();
+  ctx.translate(x, floorAt(x) + 3);
+
+  // Base plate, body, side valves, top cap
+  ctx.fillStyle = '#555a60';
+  ctx.fillRect(-1.2 * u, -0.25 * u, 2.4 * u, 0.25 * u);
+  ctx.fillStyle = '#d4472f';
+  ctx.fillRect(-0.35 * u, -1.6 * u, 0.7 * u, 1.35 * u);
+  ctx.fillStyle = '#b53a26';
+  ctx.fillRect(-0.9 * u, -1.1 * u, 0.55 * u, 0.4 * u);
+  ctx.fillRect(0.35 * u, -1.1 * u, 0.55 * u, 0.4 * u);
+  ctx.fillStyle = '#8b9096';
+  ctx.fillRect(-0.2 * u, -1.95 * u, 0.4 * u, 0.35 * u);
+
+  // Valve hand-wheels
+  ctx.strokeStyle = '#8b9096';
+  ctx.lineWidth = Math.max(2, u * 0.08);
+  [-0.62, 0.62].forEach(vx => {
+    ctx.beginPath();
+    ctx.arc(vx * u, -1.3 * u, 0.2 * u, 0, 6.28);
+    ctx.stroke();
+  });
+
+  // Blinking green status light
+  const on = 0.5 + 0.5 * Math.sin(t / 350 + x);
+  ctx.fillStyle = `rgba(90, 255, 120, ${0.35 + 0.65 * on})`;
+  ctx.beginPath();
+  ctx.arc(0, -2.1 * u, 0.1 * u + 1, 0, 6.28);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawSubsea(t) {
+  for (let i = 0; i < wells.length - 1; i++) {
+    const [a, b] = [wells[i].at * w, wells[i + 1].at * w].sort((p, q) => p - q);
+    drawTieback(a, b, t);
+  }
+  wells.forEach(wl => drawWellhead(wl.at * w, wl.main, t));
+}
+
 function drawChest(t) {
   const u = Math.max(30, Math.min(w, h) * 0.07);
   const x = w * 0.67;
@@ -294,6 +376,7 @@ function frame(t) {
   update();
   updateFish();
   drawSea(t);
+  drawSubsea(t);
   drawChest(t);
   drawFish(t);
   drawBubbles();
