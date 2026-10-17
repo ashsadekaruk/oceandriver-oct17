@@ -114,6 +114,67 @@ function drawSea(t) {
   }
 }
 
+function drawChest(t) {
+  const u = Math.max(30, Math.min(w, h) * 0.07);
+  const x = w * 0.67;
+  const y = h * 0.92 + Math.sin(x * 0.01) * 8 + 4; // rests on the sand
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Base
+  ctx.fillStyle = '#8d5524';
+  ctx.beginPath();
+  ctx.roundRect(-u, -0.9 * u, 2 * u, 0.9 * u, 4);
+  ctx.fill();
+
+  // Rounded lid
+  ctx.fillStyle = '#a0652d';
+  ctx.beginPath();
+  ctx.moveTo(-u, -0.9 * u);
+  ctx.lineTo(-u, -1.2 * u);
+  ctx.quadraticCurveTo(-u, -1.75 * u, 0, -1.75 * u);
+  ctx.quadraticCurveTo(u, -1.75 * u, u, -1.2 * u);
+  ctx.lineTo(u, -0.9 * u);
+  ctx.closePath();
+  ctx.fill();
+
+  // Metal bands
+  ctx.fillStyle = '#4a4a52';
+  ctx.fillRect(-u, -0.93 * u, 2 * u, 0.07 * u);
+  ctx.fillRect(-0.72 * u, -1.72 * u, 0.14 * u, 1.72 * u);
+  ctx.fillRect(0.58 * u, -1.72 * u, 0.14 * u, 1.72 * u);
+
+  // Golden lock
+  ctx.fillStyle = '#ffd54f';
+  ctx.beginPath();
+  ctx.roundRect(-0.14 * u, -1.08 * u, 0.28 * u, 0.32 * u, 3);
+  ctx.fill();
+  ctx.fillStyle = '#5d3a1a';
+  ctx.beginPath();
+  ctx.arc(0, -0.94 * u, 0.04 * u, 0, 6.28);
+  ctx.fill();
+
+  // Twinkling sparkles
+  ctx.fillStyle = '#fff6c2';
+  [[-0.6, -2.0], [0.1, -2.35], [0.7, -1.95]].forEach(([sx, sy], i) => {
+    const k = Math.max(0, Math.sin(t / 400 + i * 2));
+    const r = 0.14 * u * k;
+    ctx.beginPath();
+    ctx.moveTo(sx * u, sy * u - r * 2);
+    ctx.lineTo(sx * u + r * 0.5, sy * u - r * 0.5);
+    ctx.lineTo(sx * u + r * 2, sy * u);
+    ctx.lineTo(sx * u + r * 0.5, sy * u + r * 0.5);
+    ctx.lineTo(sx * u, sy * u + r * 2);
+    ctx.lineTo(sx * u - r * 0.5, sy * u + r * 0.5);
+    ctx.lineTo(sx * u - r * 2, sy * u);
+    ctx.lineTo(sx * u - r * 0.5, sy * u - r * 0.5);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  ctx.restore();
+}
+
 function updateFish() {
   for (const f of fishes) {
     f.x += f.speed;
@@ -233,6 +294,7 @@ function frame(t) {
   update();
   updateFish();
   drawSea(t);
+  drawChest(t);
   drawFish(t);
   drawBubbles();
   drawDiver();
